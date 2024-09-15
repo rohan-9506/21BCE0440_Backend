@@ -28,7 +28,7 @@ func Login(email, password string) (string, error) {
 	}
 
 	if !utils.CheckPasswordHash(password, user.PasswordHash) {
-		return "", result.Error // Change this to a specific error message if needed
+		return "", result.Error
 	}
 
 	token, err := utils.GenerateJWT(user.ID)

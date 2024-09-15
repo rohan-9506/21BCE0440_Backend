@@ -1,20 +1,47 @@
 package utils
 
 import (
-	"golang.org/x/crypto/bcrypt"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"io"
 )
 
-// HashPassword hashes the given password
-func HashPassword(password string) (string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+// Key should be 16, 24, or 32 bytes long
+var key = []byte("your-32-byte-long-secret-key-1234")
+
+// Encrypt encrypts plaintext using AES encryption
+func Encrypt(plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(hashedPassword), nil
+
+	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
+	iv := ciphertext[:aes.BlockSize]
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return nil, err
+	}
+
+	cfb := cipher.NewCFBEncrypter(block, iv)
+	cfb.XORKeyStream(ciphertext[aes.BlockSize:], plaintext)
+	return ciphertext, nil
 }
 
-// CheckPasswordHash compares a hashed password with its plaintext version
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+// Decrypt decrypts ciphertext using AES encryption
+func Decrypt(ciphertext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ciphertext) < aes.BlockSize {
+		return nil, err
+	}
+
+	iv := ciphertext[:aes.BlockSize]
+	ciphertext = ciphertext[aes.BlockSize:]
+	cfb := cipher.NewCFBDecrypter(block, iv)
+	cfb.XORKeyStream(ciphertext, ciphertext)
+	return ciphertext, nil
 }

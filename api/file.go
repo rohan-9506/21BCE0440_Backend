@@ -1,59 +1,85 @@
 package api
 
 import (
+	"bytes"
+	"context"
+	"file-sharing-system/models"
 	"file-sharing-system/services"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 )
 
-// UploadHandler handles file uploads
-func UploadHandler(c *gin.Context) {
-	// Parse the form to retrieve the file
-	file, fileHeader, err := c.Request.FormFile("file")
+var s3Client *s3.Client
+
+func init() {
+	awsCfg, err := loadAWSCredentials()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file"})
-		return
+		panic(fmt.Sprintf("failed to load AWS credentials: %v", err))
 	}
-	defer file.Close()
+	s3Client = s3.NewFromConfig(awsCfg)
+}
 
-	// Create a channel to handle concurrency
-	done := make(chan struct {
-		url  string
-		size int64
-		err  error
-	}, 1)
+func loadAWSCredentials() (aws.Config, error) {
+	awsAccessKeyID := os.Getenv("AWS_ACCESS_KEY_ID")
+	awsSecretAccessKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+	awsRegion := os.Getenv("AWS_REGION")
 
-	// Handle file upload concurrently
-	go func() {
-		url, size, err := services.UploadFileToS3(file, fileHeader.Filename)
-		done <- struct {
-			url  string
-			size int64
-			err  error
-		}{url, size, err}
-	}()
-
-	// Wait for the upload to complete
-	result := <-done
-	if result.err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file"})
-		return
+	if awsAccessKeyID == "" || awsSecretAccessKey == "" || awsRegion == "" {
+		return aws.Config{}, fmt.Errorf("AWS credentials or region not set in environment")
 	}
 
-	// Save file metadata in PostgreSQL
-	fileMetadata := services.FileMetadata{
-		FileName:   fileHeader.Filename,
+	return aws.Config{
+		Credentials: credentials.NewStaticCredentialsProvider(awsAccessKeyID, awsSecretAccessKey, ""),
+		Region:      awsRegion,
+	}, nil
+}
+
+func UploadHandler(c *gin.Context) {
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
+		return
+	}
+
+	// Read file content into a buffer
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(file); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+		return
+	}
+
+	fileName := fmt.Sprintf("%d_%s", time.Now().Unix(), "uploaded-file")
+	s3Bucket := os.Getenv("S3_BUCKET_NAME")
+
+	// Upload the file to S3
+	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket: &s3Bucket,
+		Key:    &fileName,
+		Body:   buf,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to upload file to S3: %v", err)})
+		return
+	}
+
+	// Save metadata to PostgreSQL
+	fileMetadata := models.File{
+		Name:       fileName,
 		UploadDate: time.Now(),
-		Size:       result.size,
-		S3URL:      result.url,
+		Size:       int64(buf.Len()), // Convert int to int64
+		S3URL:      fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s3Bucket, os.Getenv("AWS_REGION"), fileName),
 	}
-
 	if err := services.SaveFileMetadata(fileMetadata); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file metadata"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to save file metadata: %v", err)})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"url": result.url})
+	c.JSON(http.StatusOK, gin.H{"message": "File uploaded successfully", "file_url": fileMetadata.S3URL})
 }

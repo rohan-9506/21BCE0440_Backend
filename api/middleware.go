@@ -3,14 +3,15 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
+
+	"os"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware is a middleware function for authenticating JWT tokens
+// AuthMiddleware is a middleware function for authenticating JWT tokens using Bearer scheme
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get the token from the Authorization header
@@ -21,35 +22,36 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Split the header to get the token part
-		parts := strings.SplitN(authHeader, "Bearer ", 2)
-		if len(parts) != 2 {
+		// Ensure the header is in the correct format: "Bearer <token>"
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		if tokenString == authHeader { // if the prefix "Bearer " is not present
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Authorization header format"})
 			c.Abort()
 			return
 		}
-		tokenString := parts[1]
 
-		// Parse the token
+		// Parse the token with the secret key
+		secretKey := os.Getenv("JWT_SECRET_KEY")
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Validate the algorithm
+			// Ensure the signing method is correct
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			// Return the secret key from environment variables
-			return []byte(os.Getenv("JWT_SECRET_KEY")), nil
+			return []byte(secretKey), nil
 		})
 
+		// Handle parsing errors
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": fmt.Sprintf("Error parsing token: %v", err)})
 			c.Abort()
 			return
 		}
 
-		// Check if claims have the expected fields
+		// Validate the token claims
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			if userID, ok := claims["userID"].(string); ok {
-				c.Set("userID", userID)
+			if userID, ok := claims["id"].(float64); ok { // assuming userID is stored in claims with key "id"
+				c.Set("userID", int(userID)) // store the userID in the context
 			} else {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 				c.Abort()
@@ -61,6 +63,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Next()
+		c.Next() // continue to the next handler if authentication is successful
 	}
 }

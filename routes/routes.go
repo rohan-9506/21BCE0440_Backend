@@ -8,14 +8,14 @@ import (
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
-
 	r.POST("/api/register", api.RegisterHandler)
 	r.POST("/api/login", api.LoginHandler)
+	r.POST("/api/upload", api.UploadHandler)
 
 	authRoutes := r.Group("/api")
 	authRoutes.Use(api.AuthMiddleware())
 	{
-		authRoutes.POST("/upload", api.UploadHandler)
+		//authRoutes.POST("/upload", api.UploadHandler)
 	}
 
 	return r

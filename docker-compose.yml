@@ -27,6 +27,8 @@ services:
       DB_NAME: file_sharing_db
     ports:
       - "8080:8080"  # Add this line to expose port 8080
+    env_file:
+      - .env  
     depends_on:
       - db
       - redis

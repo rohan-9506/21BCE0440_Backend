@@ -1,6 +1,7 @@
 package main
 
 import (
+	"file-sharing-system/api"
 	"file-sharing-system/models"
 	"file-sharing-system/routes"
 	"log"
@@ -9,6 +10,7 @@ import (
 func main() {
 	// Load environment variables
 	models.InitDB()
+	api.InitRedis()
 
 	// Run migrations to ensure the database schema is up-to-date
 	if err := models.GetDB().AutoMigrate(&models.File{}); err != nil {

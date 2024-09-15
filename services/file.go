@@ -6,5 +6,6 @@ import (
 
 // SaveFileMetadata saves file metadata to the database
 func SaveFileMetadata(file models.File) error {
-	return models.SaveFileMetadata(file)
+	db := models.GetDB()
+	return db.Create(&file).Error
 }

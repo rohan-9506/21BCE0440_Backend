@@ -5,10 +5,27 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"io"
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
-// Key should be 16, 24, or 32 bytes long
-var key = []byte("your-32-byte-long-secret-key-1234")
+var key []byte
+
+func init() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
+	// Retrieve encryption key from environment variables
+	keyStr := os.Getenv("ENCRYPTION_KEY")
+	if len(keyStr) != 32 {
+		log.Fatalf("Invalid encryption key length. Key must be 32 bytes long.")
+	}
+	key = []byte(keyStr)
+}
 
 // Encrypt encrypts plaintext using AES encryption
 func Encrypt(plaintext []byte) ([]byte, error) {

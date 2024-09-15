@@ -10,7 +10,7 @@ func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
 	// Add rate limit middleware to the router
-	r.Use(api.RateLimitMiddleware())
+	r.Use(api.RateLimitMiddleware)
 
 	r.POST("/api/register", api.RegisterHandler)
 	r.POST("/api/login", api.LoginHandler)

@@ -13,6 +13,7 @@ import (
 
 	"file-sharing-system/models"
 	"file-sharing-system/services"
+	"file-sharing-system/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -20,7 +21,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
-	// Replace "your-package-path" with the actual package path that contains the Encrypt function
 )
 
 var s3Client *s3.Client
@@ -86,7 +86,7 @@ func UploadHandler(c *gin.Context) {
 	s3Bucket := os.Getenv("S3_BUCKET_NAME")
 
 	// Encrypt the file content
-	encryptedData, err := Encrypt(buf.Bytes(), []byte("your-encryption-key"))
+	encryptedData, err := utils.Encrypt(buf.Bytes())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt file"})
 		return
